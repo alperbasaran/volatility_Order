@@ -1,0 +1,1278 @@
+# Digital Forensics Order of Volatility Checklist
+
+**RFC 3227–Inspired Practical Checklist for Incident Response and Digital Forensics**
+
+The **Order of Volatility** is the principle that evidence which is most likely to disappear or change should generally be collected before evidence that is more persistent.
+
+RFC 3227, *Guidelines for Evidence Collection and Archiving*, gives the following example order:
+
+1. Registers and cache
+2. Routing table, ARP cache, process table, kernel statistics, memory
+3. Temporary file systems
+4. Disk
+5. Remote logging and monitoring data
+6. Physical configuration and network topology
+7. Archival media
+
+This checklist expands that model for modern Windows, Linux, virtualized, cloud-connected, and enterprise systems.
+
+---
+
+# 0. Before You Collect Anything
+
+Before touching the system:
+
+* [ ] Confirm authorization to perform evidence collection.
+* [ ] Record investigator name and contact details.
+* [ ] Record case / incident identifier.
+* [ ] Record evidence identifier.
+* [ ] Record date and time collection begins.
+* [ ] Record the time source and timezone being used.
+* [ ] Photograph or record the current system state where appropriate.
+* [ ] Record whether the system is powered on, powered off, suspended, or hibernating.
+* [ ] Record who currently has access to the system.
+* [ ] Record the system hostname.
+* [ ] Record visible IP addresses if known.
+* [ ] Record logged-in user if visible.
+* [ ] Record physical location.
+* [ ] Record whether the device is connected to wired networks.
+* [ ] Record whether Wi-Fi is enabled.
+* [ ] Record whether Bluetooth is enabled.
+* [ ] Record attached removable devices.
+* [ ] Record visible external hardware.
+* [ ] Record any actions already taken by administrators or users.
+* [ ] Start an evidence collection log.
+* [ ] Document every command executed.
+* [ ] Document every tool used.
+* [ ] Record tool versions.
+* [ ] Record output filenames and destinations.
+* [ ] Record any errors encountered during collection.
+
+**Do not blindly follow a generic sequence.** Determine what evidence is likely to disappear first on the system you are examining.
+
+---
+
+# Tier 1 — CPU, Registers and Processor State
+
+**Extremely volatile**
+
+This information can change in microseconds and is normally available only through specialized acquisition, debugging, hypervisor, crash-dump, or hardware mechanisms.
+
+* [ ] CPU registers
+* [ ] Instruction pointer / program counter
+* [ ] Stack pointer
+* [ ] CPU execution state
+* [ ] CPU cache contents
+* [ ] Processor-specific state
+* [ ] Debug registers
+* [ ] Hardware breakpoint state
+* [ ] CPU virtualization state where obtainable
+
+### Practical note
+
+On an ordinary incident response engagement you normally **do not acquire CPU registers or CPU caches directly**.
+
+They remain important conceptually because RFC 3227 places them at the top of the volatility hierarchy.
+
+---
+
+# Tier 2 — Active Network State
+
+**Extremely volatile**
+
+Network state can disappear immediately when:
+
+* a connection terminates,
+* an interface goes down,
+* a process exits,
+* the host reboots,
+* a DHCP lease changes,
+* an ARP/neighbor entry expires.
+
+## Network Interfaces
+
+* [ ] Interface names
+* [ ] Interface status
+* [ ] IPv4 addresses
+* [ ] IPv6 addresses
+* [ ] Subnet masks / prefix lengths
+* [ ] Default gateways
+* [ ] MAC addresses
+* [ ] DNS server configuration
+* [ ] DHCP configuration
+* [ ] DHCP lease information
+* [ ] VPN interfaces
+* [ ] Virtual interfaces
+* [ ] Tunnel interfaces
+* [ ] VLAN configuration
+* [ ] Interface statistics
+
+## Active Connections
+
+* [ ] Established TCP connections
+* [ ] Listening TCP ports
+* [ ] UDP endpoints
+* [ ] Local addresses
+* [ ] Remote addresses
+* [ ] Local ports
+* [ ] Remote ports
+* [ ] Connection states
+* [ ] Associated process IDs
+* [ ] Associated executable names where possible
+
+Potential examples:
+
+**Windows**
+
+```text
+netstat -ano
+Get-NetTCPConnection
+Get-NetUDPEndpoint
+```
+
+**Linux**
+
+```text
+ss -plant
+ss -uanp
+```
+
+## Routing Information
+
+* [ ] IPv4 routing table
+* [ ] IPv6 routing table
+* [ ] Policy routing rules
+* [ ] VPN routes
+* [ ] Static routes
+* [ ] Dynamic routing information if relevant
+
+## ARP / Neighbor Cache
+
+* [ ] IPv4 ARP cache
+* [ ] IPv6 neighbor cache
+* [ ] MAC-to-IP mappings
+* [ ] Interface associated with each neighbor
+
+## DNS State
+
+* [ ] Local DNS resolver cache
+* [ ] Recently resolved names where obtainable
+* [ ] DNS client configuration
+* [ ] Hosts-file state
+* [ ] Resolver configuration
+
+## Other Ephemeral Network State
+
+Where relevant:
+
+* [ ] NAT connection state
+* [ ] Connection tracking tables
+* [ ] Local firewall state tables
+* [ ] Active VPN sessions
+* [ ] Active proxy connections
+* [ ] Active wireless connections
+* [ ] Current Wi-Fi SSID
+* [ ] Wi-Fi BSSID / access point
+* [ ] Bluetooth connections
+* [ ] Network namespaces
+* [ ] Container network state
+
+---
+
+# Tier 3 — Running System and Process State
+
+**Highly volatile**
+
+Processes, threads, loaded libraries and execution state can disappear immediately when a program terminates.
+
+## Processes
+
+* [ ] Running processes
+* [ ] Process IDs
+* [ ] Parent process IDs
+* [ ] Process start times
+* [ ] Process owners
+* [ ] Process command lines
+* [ ] Executable paths
+* [ ] Process integrity / privilege levels
+* [ ] Process environment variables
+* [ ] Process working directories
+* [ ] Process creation hierarchy
+* [ ] Process session information
+
+Pay particular attention to:
+
+* [ ] Processes executing from temporary directories
+* [ ] Processes executing from user-writable locations
+* [ ] Processes without expected executable files
+* [ ] Suspicious parent-child relationships
+* [ ] Shell interpreters
+* [ ] Script interpreters
+* [ ] Remote administration tools
+* [ ] LOLBins / LOLBAS-style activity
+* [ ] Unexpected privileged processes
+
+## Threads
+
+Where feasible:
+
+* [ ] Thread IDs
+* [ ] Thread start addresses
+* [ ] Thread owners
+* [ ] Suspicious thread injection indicators
+
+## Loaded Modules
+
+* [ ] Loaded DLLs
+* [ ] Shared libraries
+* [ ] Kernel modules
+* [ ] Drivers
+* [ ] Dynamically loaded modules
+* [ ] Module paths
+* [ ] Unsigned or suspicious modules where determinable
+
+## Open Handles / File Descriptors
+
+* [ ] Open files
+* [ ] Open directories
+* [ ] Open registry handles
+* [ ] Open network sockets
+* [ ] Pipes
+* [ ] Named pipes
+* [ ] Shared-memory objects
+* [ ] Mutexes
+* [ ] Semaphores
+* [ ] Deleted-but-still-open files
+
+The last category is particularly important on Linux because a process may continue accessing a deleted file while that process remains alive.
+
+---
+
+# Tier 4 — Logged-On Users, Sessions and Authentication State
+
+**Highly volatile**
+
+* [ ] Currently logged-on users
+* [ ] Local interactive sessions
+* [ ] Remote interactive sessions
+* [ ] RDP sessions
+* [ ] SSH sessions
+* [ ] Console sessions
+* [ ] Disconnected but existing sessions
+* [ ] Session IDs
+* [ ] Login times
+* [ ] Source IP addresses where available
+* [ ] Current privilege context
+* [ ] Recently authenticated users where obtainable
+* [ ] Active Kerberos tickets
+* [ ] Authentication tokens where legally and technically appropriate
+* [ ] Cached authentication/session information where appropriate
+
+Potentially useful Windows information includes:
+
+```text
+query user
+quser
+klist
+whoami /all
+```
+
+Potentially useful Linux information includes:
+
+```text
+who
+w
+last
+loginctl
+```
+
+---
+
+# Tier 5 — Kernel and Operating-System Runtime State
+
+**Highly volatile**
+
+* [ ] Kernel version
+* [ ] Kernel statistics
+* [ ] System uptime
+* [ ] Boot time
+* [ ] Loaded kernel modules
+* [ ] Loaded drivers
+* [ ] Mounted devices
+* [ ] Mounted file systems
+* [ ] Kernel messages
+* [ ] Device state
+* [ ] Hardware currently detected by the OS
+* [ ] System resource usage
+* [ ] Active services
+* [ ] Active daemons
+* [ ] Service runtime states
+* [ ] Scheduled jobs currently executing
+* [ ] Current system time
+* [ ] Current timezone
+* [ ] System clock drift
+
+RFC 3227 specifically recommends recording the extent of the system's clock drift.
+
+---
+
+# Tier 6 — Full Physical Memory / RAM
+
+**Highly volatile**
+
+RAM can disappear completely when power is removed and substantial portions can change while the machine continues operating.
+
+When authorized and technically possible:
+
+* [ ] Acquire a complete physical memory image.
+* [ ] Record acquisition tool.
+* [ ] Record tool version.
+* [ ] Record acquisition start time.
+* [ ] Record acquisition completion time.
+* [ ] Record destination media.
+* [ ] Record acquisition errors.
+* [ ] Calculate cryptographic hashes of the resulting image.
+* [ ] Preserve the original memory acquisition.
+* [ ] Analyze a working copy.
+
+Memory may contain evidence of:
+
+* [ ] Running processes
+* [ ] Terminated process remnants
+* [ ] Process command lines
+* [ ] Network connections
+* [ ] Injected code
+* [ ] Unpacked malware
+* [ ] Reflectively loaded code
+* [ ] DLLs / shared libraries
+* [ ] Kernel modules
+* [ ] Drivers
+* [ ] Encryption keys
+* [ ] Credentials
+* [ ] Authentication material
+* [ ] Kerberos tickets
+* [ ] Browser session material
+* [ ] Clipboard contents
+* [ ] Command history remnants
+* [ ] Console buffers
+* [ ] Decrypted content
+* [ ] File-system structures
+* [ ] Registry structures
+* [ ] Environment variables
+* [ ] Shellcode
+* [ ] Rootkits
+* [ ] Memory-only malware
+
+### Critical decision
+
+If full-disk encryption is active and the system is currently unlocked, shutting the system down before memory acquisition may make subsequent evidence acquisition substantially more difficult.
+
+That decision must be made deliberately and documented.
+
+---
+
+# Tier 7 — Volatile Virtualization and Container State
+
+Modern systems introduce volatile evidence that RFC 3227 could not explicitly address in 2002.
+
+## Virtual Machines
+
+* [ ] Running VM inventory
+* [ ] VM power state
+* [ ] VM runtime configuration
+* [ ] VM memory
+* [ ] VM snapshots
+* [ ] Hypervisor networking
+* [ ] Attached virtual disks
+* [ ] Mounted ISO images
+* [ ] Clipboard / integration state where relevant
+* [ ] Hypervisor console state
+
+## Containers
+
+* [ ] Running containers
+* [ ] Container IDs
+* [ ] Container images
+* [ ] Container command lines
+* [ ] Container processes
+* [ ] Container environment variables
+* [ ] Container network configuration
+* [ ] Container mounts
+* [ ] Container namespaces
+* [ ] Ephemeral container file systems
+* [ ] Container logs
+* [ ] Kubernetes pod state where relevant
+
+For Kubernetes environments:
+
+* [ ] Running pods
+* [ ] Pod IPs
+* [ ] Node assignments
+* [ ] Namespaces
+* [ ] Services
+* [ ] Endpoints
+* [ ] Active deployments
+* [ ] Jobs
+* [ ] ConfigMaps
+* [ ] Relevant Secrets, subject to authorization
+* [ ] Events
+* [ ] Runtime/container information
+
+---
+
+# Tier 8 — Temporary and Ephemeral File Systems
+
+RFC 3227 places temporary file systems ahead of persistent disk storage.
+
+Examples include:
+
+* [ ] RAM disks
+* [ ] `tmpfs`
+* [ ] `/tmp`
+* [ ] `/var/tmp`
+* [ ] `/dev/shm`
+* [ ] Windows `%TEMP%`
+* [ ] Windows `%TMP%`
+* [ ] Application temporary directories
+* [ ] Browser caches
+* [ ] Temporary downloads
+* [ ] Installer extraction directories
+* [ ] Temporary scripts
+* [ ] Temporary malware payloads
+* [ ] Temporary container layers
+* [ ] Memory-backed file systems
+* [ ] Temporary mount points
+
+Pay particular attention to:
+
+* [ ] Recently created executables
+* [ ] Recently created scripts
+* [ ] Encoded PowerShell
+* [ ] Shell scripts
+* [ ] Downloaded payloads
+* [ ] Archive extraction directories
+* [ ] Temporary credential files
+* [ ] Staging directories
+* [ ] Tools used by attackers
+
+---
+
+# Tier 9 — Local Runtime Logs and Buffers
+
+Some logs are technically stored on disk but are sufficiently dynamic that collecting them early may be prudent.
+
+* [ ] Kernel ring buffer
+* [ ] In-memory application logs
+* [ ] Debug logs
+* [ ] Console buffers
+* [ ] Local event buffers
+* [ ] Journald volatile storage
+* [ ] Temporary audit buffers
+* [ ] Application runtime telemetry
+
+Examples:
+
+```text
+dmesg
+journalctl
+```
+
+Do not treat every log as equally volatile. Determine whether the log exists only in memory, is periodically flushed to disk, or is already stored persistently.
+
+---
+
+# Tier 10 — Persistent Local File-System Evidence
+
+**Less volatile than RAM, but still subject to change**
+
+Where forensic imaging is justified:
+
+* [ ] Acquire a bit-stream / forensic image.
+* [ ] Use write blocking where technically appropriate.
+* [ ] Record source device identifiers.
+* [ ] Record destination device identifiers.
+* [ ] Record acquisition tool and version.
+* [ ] Record acquisition parameters.
+* [ ] Record start and completion times.
+* [ ] Hash acquired evidence.
+* [ ] Preserve original evidence.
+* [ ] Perform examination on verified working copies.
+
+## File-System Metadata
+
+Collect or preserve:
+
+* [ ] Partition tables
+* [ ] Volume information
+* [ ] File-system metadata
+* [ ] Allocation structures
+* [ ] Deleted file metadata
+* [ ] Unallocated space
+* [ ] File slack
+* [ ] Timestamps
+* [ ] Alternate data streams
+* [ ] Symbolic links
+* [ ] Hard links
+
+### NTFS examples
+
+* [ ] `$MFT`
+* [ ] `$LogFile`
+* [ ] `$UsnJrnl`
+* [ ] `$Bitmap`
+* [ ] `$Secure`
+* [ ] `$Extend`
+* [ ] Volume Shadow Copies
+
+### Linux file-system examples
+
+* [ ] inode metadata
+* [ ] journal data
+* [ ] deleted-but-recoverable files
+* [ ] ext4 metadata
+* [ ] XFS metadata
+* [ ] Btrfs metadata
+* [ ] snapshots where available
+
+---
+
+# Tier 11 — Operating-System Artifacts
+
+## Windows
+
+Consider preserving:
+
+* [ ] Registry hives
+* [ ] SYSTEM
+* [ ] SOFTWARE
+* [ ] SAM
+* [ ] SECURITY
+* [ ] NTUSER.DAT
+* [ ] UsrClass.dat
+* [ ] Windows Event Logs
+* [ ] Prefetch
+* [ ] Amcache
+* [ ] AppCompat / ShimCache-related data
+* [ ] SRUM
+* [ ] LNK files
+* [ ] Jump Lists
+* [ ] Recycle Bin
+* [ ] Scheduled Tasks
+* [ ] Services configuration
+* [ ] PowerShell logs
+* [ ] PowerShell history
+* [ ] WMI repository
+* [ ] Defender logs
+* [ ] Windows Firewall logs
+* [ ] RDP artifacts
+* [ ] USB/device history
+* [ ] Browser artifacts
+* [ ] User profile artifacts
+* [ ] Pagefile
+* [ ] Hibernation file
+* [ ] Crash dumps
+
+## Linux / Unix
+
+Consider preserving:
+
+* [ ] `/etc`
+* [ ] `/var/log`
+* [ ] shell histories
+* [ ] SSH configuration
+* [ ] SSH authorized keys
+* [ ] cron jobs
+* [ ] systemd units
+* [ ] audit logs
+* [ ] authentication logs
+* [ ] sudo logs
+* [ ] package management logs
+* [ ] application logs
+* [ ] web server logs
+* [ ] user home directories
+* [ ] persistence mechanisms
+* [ ] `/proc` information acquired during live response
+* [ ] swap partitions/files
+
+---
+
+# Tier 12 — Application Evidence
+
+Applications often maintain investigation-critical evidence independently of the operating system.
+
+Consider:
+
+* [ ] Web server logs
+* [ ] Database logs
+* [ ] Database audit trails
+* [ ] Database transaction logs
+* [ ] Application audit logs
+* [ ] ERP logs
+* [ ] CRM logs
+* [ ] VPN client logs
+* [ ] Remote administration logs
+* [ ] Backup software logs
+* [ ] E-mail client artifacts
+* [ ] Collaboration application artifacts
+* [ ] Browser history
+* [ ] Browser downloads
+* [ ] Browser cookies
+* [ ] Browser cache
+* [ ] Browser extensions
+* [ ] Browser local storage
+* [ ] Developer tool histories
+* [ ] IDE artifacts
+* [ ] Source-code repository configuration
+* [ ] File synchronization logs
+
+---
+
+# Tier 13 — Local Security Controls and Telemetry
+
+Collect relevant evidence from:
+
+* [ ] Endpoint protection
+* [ ] EDR
+* [ ] XDR
+* [ ] Host IDS
+* [ ] Host firewall
+* [ ] DLP
+* [ ] Application control
+* [ ] Device control
+* [ ] Anti-malware
+* [ ] Exploit protection
+* [ ] Local audit frameworks
+
+Potential evidence includes:
+
+* [ ] Detection events
+* [ ] Quarantine records
+* [ ] Process telemetry
+* [ ] File telemetry
+* [ ] Network telemetry
+* [ ] Detection metadata
+* [ ] Response actions
+* [ ] Isolation history
+* [ ] Administrator actions
+
+---
+
+# Tier 14 — Remote Network and Security Telemetry
+
+RFC 3227 explicitly identifies remote logging and monitoring data relevant to the affected system.
+
+This evidence may be less volatile than RAM, but retention policies can still cause it to disappear surprisingly quickly.
+
+## Network Infrastructure
+
+* [ ] Firewall logs
+* [ ] IDS logs
+* [ ] IPS logs
+* [ ] Router logs
+* [ ] Switch logs
+* [ ] Wireless controller logs
+* [ ] DHCP logs
+* [ ] DNS logs
+* [ ] VPN logs
+* [ ] Proxy logs
+* [ ] Web filtering logs
+* [ ] NAT logs
+* [ ] NetFlow
+* [ ] IPFIX
+* [ ] packet capture
+* [ ] load balancer logs
+* [ ] reverse proxy logs
+* [ ] WAF logs
+
+## Security Infrastructure
+
+* [ ] SIEM events
+* [ ] SOAR cases
+* [ ] EDR cloud console telemetry
+* [ ] XDR telemetry
+* [ ] NDR telemetry
+* [ ] IDS/IPS telemetry
+* [ ] threat detection alerts
+* [ ] sandbox reports
+* [ ] malware analysis results
+* [ ] vulnerability scanner results
+* [ ] asset inventory history
+
+### Important
+
+Determine retention immediately.
+
+A log source retained for only 24 hours may deserve higher practical collection priority than a persistent workstation disk.
+
+---
+
+# Tier 15 — Identity Infrastructure
+
+Modern investigations frequently depend heavily on centralized identity evidence.
+
+Collect relevant evidence from:
+
+* [ ] Active Directory domain controllers
+* [ ] Microsoft Entra ID
+* [ ] Okta
+* [ ] LDAP
+* [ ] RADIUS
+* [ ] TACACS+
+* [ ] SSO providers
+* [ ] MFA providers
+* [ ] PAM systems
+
+Consider:
+
+* [ ] Authentication events
+* [ ] Failed logons
+* [ ] Successful logons
+* [ ] MFA events
+* [ ] Password resets
+* [ ] Account creation
+* [ ] Account deletion
+* [ ] Group membership changes
+* [ ] Privilege elevation
+* [ ] Role changes
+* [ ] Service account activity
+* [ ] OAuth grants
+* [ ] Application consent
+* [ ] Token-related events
+* [ ] Conditional access results
+* [ ] Administrative activity
+
+---
+
+# Tier 16 — Cloud and SaaS Evidence
+
+Cloud evidence introduces a major complication:
+
+**logical volatility is determined by provider retention, not simply by whether the data lives on "disk."**
+
+Potential sources include:
+
+## Cloud Infrastructure
+
+* [ ] AWS CloudTrail
+* [ ] AWS VPC Flow Logs
+* [ ] AWS GuardDuty
+* [ ] AWS IAM activity
+* [ ] Azure Activity Logs
+* [ ] Azure resource logs
+* [ ] Microsoft Defender telemetry
+* [ ] Google Cloud Audit Logs
+* [ ] Cloud network-flow logs
+* [ ] Cloud storage access logs
+* [ ] Cloud firewall logs
+* [ ] Cloud IAM events
+
+## SaaS
+
+* [ ] Microsoft 365 audit logs
+* [ ] Exchange audit logs
+* [ ] SharePoint activity
+* [ ] OneDrive activity
+* [ ] Teams activity
+* [ ] Google Workspace audit logs
+* [ ] GitHub audit logs
+* [ ] GitLab audit logs
+* [ ] Slack audit logs
+* [ ] Salesforce audit logs
+* [ ] Other business SaaS logs
+
+For every cloud source determine:
+
+* [ ] Retention duration
+* [ ] Export availability
+* [ ] Whether historical searching requires a particular license
+* [ ] Whether logs can be deleted
+* [ ] Whether an attacker with administrative access could alter retention
+* [ ] Relevant timezone
+* [ ] API retrieval limits
+
+---
+
+# Tier 17 — Email Infrastructure
+
+For incidents involving phishing, business email compromise, credential theft or lateral movement:
+
+* [ ] Original email message
+* [ ] Full message headers
+* [ ] MIME structure
+* [ ] Attachments
+* [ ] Embedded URLs
+* [ ] Message trace
+* [ ] Mailbox audit logs
+* [ ] Transport logs
+* [ ] Mail forwarding rules
+* [ ] Inbox rules
+* [ ] Delegated permissions
+* [ ] Mailbox permissions
+* [ ] OAuth applications
+* [ ] Sign-in records
+* [ ] Spam/security gateway logs
+* [ ] URL-rewriting logs
+* [ ] Attachment sandbox results
+* [ ] Quarantine evidence
+
+---
+
+# Tier 18 — Remote Systems and Corroborating Hosts
+
+Do not examine the compromised machine in isolation.
+
+Potential corroborating evidence exists on:
+
+* [ ] Domain controllers
+* [ ] Authentication servers
+* [ ] DNS servers
+* [ ] DHCP servers
+* [ ] File servers
+* [ ] Database servers
+* [ ] Application servers
+* [ ] Proxy servers
+* [ ] Jump hosts
+* [ ] Bastion hosts
+* [ ] VPN concentrators
+* [ ] Administrative workstations
+* [ ] Backup servers
+* [ ] Hypervisors
+* [ ] Other compromised endpoints
+* [ ] Attacker pivot systems
+
+Corroborating evidence is often essential for reconstructing the timeline.
+
+---
+
+# Tier 19 — Backups, Snapshots and Replicas
+
+* [ ] Server backups
+* [ ] Endpoint backups
+* [ ] VM snapshots
+* [ ] Storage snapshots
+* [ ] Volume Shadow Copies
+* [ ] Database backups
+* [ ] Database replicas
+* [ ] Cloud snapshots
+* [ ] Cloud machine images
+* [ ] Cloud storage versions
+* [ ] SaaS backups
+* [ ] Configuration backups
+* [ ] Network device configuration archives
+
+Record:
+
+* [ ] Backup creation time
+* [ ] Retention period
+* [ ] Backup type
+* [ ] Backup location
+* [ ] Encryption status
+* [ ] Integrity controls
+* [ ] Whether attackers could modify/delete the backup
+
+---
+
+# Tier 20 — Physical Configuration and Network Topology
+
+RFC 3227 places physical configuration and network topology toward the less-volatile end of its example hierarchy.
+
+Document:
+
+* [ ] Device manufacturer
+* [ ] Device model
+* [ ] Serial number
+* [ ] Asset tag
+* [ ] Installed storage
+* [ ] Installed memory
+* [ ] Connected peripherals
+* [ ] External storage devices
+* [ ] Network interfaces
+* [ ] Physical network connections
+* [ ] Switch ports
+* [ ] Rack location
+* [ ] Physical security controls
+
+## Network Architecture
+
+Preserve:
+
+* [ ] Network diagrams
+* [ ] VLAN architecture
+* [ ] IP addressing schemes
+* [ ] Firewall architecture
+* [ ] DMZ architecture
+* [ ] VPN architecture
+* [ ] Wireless architecture
+* [ ] Internet connections
+* [ ] Cloud connectivity
+* [ ] Site-to-site tunnels
+* [ ] Network segmentation
+* [ ] Administrative networks
+* [ ] Out-of-band management networks
+
+Do not assume existing diagrams are accurate.
+
+Compare documentation with observed evidence.
+
+---
+
+# Tier 21 — Configuration and Documentation
+
+Potentially useful evidence includes:
+
+* [ ] Firewall configurations
+* [ ] Router configurations
+* [ ] Switch configurations
+* [ ] VPN configurations
+* [ ] Group Policy
+* [ ] Active Directory configuration
+* [ ] IAM configuration
+* [ ] EDR policies
+* [ ] SIEM configuration
+* [ ] Logging configuration
+* [ ] retention policies
+* [ ] backup policies
+* [ ] hardening baselines
+* [ ] network diagrams
+* [ ] asset inventories
+* [ ] CMDB records
+* [ ] vulnerability reports
+* [ ] penetration-test reports
+* [ ] change-management records
+* [ ] administrative tickets
+* [ ] incident tickets
+
+---
+
+# Tier 22 — Archival Media
+
+**Generally least volatile**
+
+Examples:
+
+* [ ] Offline backups
+* [ ] Backup tapes
+* [ ] Archived disk images
+* [ ] Cold-storage backups
+* [ ] Optical media
+* [ ] Archived logs
+* [ ] Long-term packet archives
+* [ ] Historical system images
+* [ ] Historical configuration archives
+* [ ] Immutable object storage
+* [ ] WORM storage
+* [ ] Legal-hold archives
+
+Record:
+
+* [ ] Media identifier
+* [ ] Creation date
+* [ ] Custodian
+* [ ] Storage location
+* [ ] Access history
+* [ ] Integrity information
+* [ ] Encryption information
+
+---
+
+# Practical Order-of-Volatility Summary
+
+A modern practical hierarchy can be summarized as:
+
+```text
+MOST VOLATILE
+      │
+      ▼
+CPU registers / cache
+      │
+Active network state
+      │
+Running processes / threads / handles
+      │
+Logged-on users / sessions / authentication state
+      │
+Kernel and OS runtime state
+      │
+RAM
+      │
+VM / container runtime state
+      │
+Temporary / memory-backed file systems
+      │
+Volatile logs and runtime buffers
+      │
+Local persistent storage
+      │
+OS and application artifacts
+      │
+Remote security/network telemetry
+      │
+Identity-provider evidence
+      │
+Cloud / SaaS evidence
+      │
+Remote/corroborating systems
+      │
+Backups / snapshots
+      │
+Physical configuration / topology
+      │
+Documentation / configuration archives
+      │
+Archival media
+      ▼
+LEAST VOLATILE
+```
+
+---
+
+# Important: This Is a Decision Model, Not a Rigid Recipe
+
+The order above must **not** be interpreted as:
+
+> "Always perform these 22 steps in exactly this order."
+
+The correct acquisition order depends on the incident.
+
+For example:
+
+### Scenario A — Malware running in memory
+
+Prioritize:
+
+```text
+Network state
+→ Processes
+→ RAM
+→ Temporary files
+→ Disk
+→ Remote telemetry
+```
+
+### Scenario B — Ransomware actively encrypting files
+
+Stopping ongoing damage may take precedence over perfect evidence acquisition.
+
+Preservation requirements must be balanced against containment requirements.
+
+### Scenario C — Cloud account compromise
+
+Cloud audit records with a short retention period could be more urgent than acquiring a workstation disk.
+
+Prioritize:
+
+```text
+Identity logs
+→ Cloud audit logs
+→ SaaS logs
+→ affected endpoints
+→ persistent infrastructure
+```
+
+### Scenario D — Full-disk-encrypted laptop
+
+If the laptop is powered on and unlocked:
+
+```text
+Document system
+→ Network/process state
+→ Acquire RAM
+→ Identify encryption state
+→ Acquire accessible evidence
+→ Decide whether shutdown is appropriate
+```
+
+Simply pulling the power could destroy access to encryption material present in memory.
+
+---
+
+# Live Response Collection Checklist
+
+For a typical powered-on endpoint, a reasonable practical collection sequence is:
+
+## Phase 1 — Document
+
+* [ ] Photograph / document system state
+* [ ] Record system time
+* [ ] Record investigator time
+* [ ] Determine clock difference
+* [ ] Record hostname
+* [ ] Record logged-on users
+* [ ] Record collection actions
+
+## Phase 2 — Network
+
+* [ ] Interfaces
+* [ ] IP configuration
+* [ ] ARP / neighbor cache
+* [ ] Routing table
+* [ ] DNS cache
+* [ ] TCP connections
+* [ ] UDP endpoints
+* [ ] Listening ports
+* [ ] VPN connections
+
+## Phase 3 — Execution State
+
+* [ ] Processes
+* [ ] Process tree
+* [ ] Command lines
+* [ ] Threads where appropriate
+* [ ] Loaded modules
+* [ ] Open handles
+* [ ] Open files
+* [ ] Services
+* [ ] Drivers
+* [ ] Logged-on sessions
+* [ ] Scheduled jobs
+
+## Phase 4 — Memory
+
+* [ ] Acquire RAM
+* [ ] Hash acquisition
+* [ ] Record acquisition metadata
+
+## Phase 5 — Ephemeral Storage
+
+* [ ] Temporary directories
+* [ ] Memory-backed filesystems
+* [ ] Runtime logs
+* [ ] Temporary application artifacts
+
+## Phase 6 — Persistent Storage
+
+* [ ] Acquire forensic image or targeted evidence
+* [ ] Verify acquisition
+* [ ] Preserve file-system metadata
+* [ ] Collect OS forensic artifacts
+
+## Phase 7 — External Evidence
+
+* [ ] EDR
+* [ ] SIEM
+* [ ] Firewall
+* [ ] DNS
+* [ ] DHCP
+* [ ] Proxy
+* [ ] VPN
+* [ ] Identity provider
+* [ ] Cloud
+* [ ] SaaS
+* [ ] Email infrastructure
+
+## Phase 8 — Context
+
+* [ ] Network topology
+* [ ] Physical configuration
+* [ ] Security architecture
+* [ ] Configuration backups
+* [ ] Asset inventory
+* [ ] Change records
+
+## Phase 9 — Archives
+
+* [ ] Backups
+* [ ] Snapshots
+* [ ] Historical logs
+* [ ] Archived configurations
+* [ ] Offline media
+
+---
+
+# Evidence Integrity Checklist
+
+For every acquired evidence object:
+
+* [ ] Assign unique evidence ID.
+* [ ] Record source.
+* [ ] Record acquisition date/time.
+* [ ] Record investigator.
+* [ ] Record acquisition method.
+* [ ] Record acquisition tool.
+* [ ] Record tool version.
+* [ ] Record destination.
+* [ ] Calculate cryptographic hash.
+* [ ] Record hash algorithm.
+* [ ] Record hash value.
+* [ ] Protect original evidence from modification.
+* [ ] Maintain chain of custody.
+* [ ] Analyze verified working copies where possible.
+* [ ] Document any unavoidable modification to the source.
+
+---
+
+# Questions to Ask Before Moving to the Next Tier
+
+At each stage ask:
+
+* [ ] What evidence will disappear if this machine shuts down?
+* [ ] What evidence will disappear if this process terminates?
+* [ ] What evidence will disappear if this user logs out?
+* [ ] What evidence changes continuously?
+* [ ] What evidence has the shortest retention period?
+* [ ] What evidence could an attacker remotely destroy?
+* [ ] What evidence could administrators accidentally overwrite?
+* [ ] What evidence exists somewhere other than this machine?
+* [ ] What evidence would corroborate what I am seeing?
+* [ ] Will my next collection action modify evidence?
+* [ ] Is that modification justified?
+* [ ] Have I documented the modification?
+
+---
+
+# The Golden Rule
+
+> **Collect what will disappear first.**
+
+But volatility is only one factor.
+
+A real investigator must balance:
+
+```text
+VOLATILITY
+     +
+EVIDENTIAL VALUE
+     +
+RISK OF DESTRUCTION
+     +
+COLLECTION IMPACT
+     +
+INCIDENT CONTAINMENT REQUIREMENTS
+     =
+ACQUISITION PRIORITY
+```
+
+The objective is not to follow a checklist mechanically.
+
+The objective is to preserve enough reliable evidence to reconstruct what happened while minimizing unnecessary modification of the system.
+
+---
+
+# Reference
+
+Brezinski, D. & Killalea, T.
+**RFC 3227 / BCP 55 — Guidelines for Evidence Collection and Archiving**
+Internet Engineering Task Force, February 2002.
+
+Section 2.1 — *Order of Volatility*
+
+RFC 3227's original example:
+
+```text
+registers, cache
+
+routing table, arp cache, process table,
+kernel statistics, memory
+
+temporary file systems
+
+disk
+
+remote logging and monitoring data
+
+physical configuration, network topology
+
+archival media
+```
+
+This checklist expands that principle for contemporary DFIR environments and should not be interpreted as an official extension of RFC 3227.
